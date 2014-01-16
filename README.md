@@ -6,7 +6,7 @@ This is a command line tool for querying the Mixpanel API.
 Installation
 ------------
 
-Requires pip to be installed.
+Requires Python3 with pip installed.
 
 Run python setup.py install.
 
@@ -21,4 +21,4 @@ MIXPANEL_API_SECRET to your API key and secret.
 
 Then run the tool using:
 
-    python -m mixpanel_cli
+    python -m mixpanel_cli --help
