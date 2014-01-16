@@ -8,7 +8,7 @@ import sys
 
 from pprint import pprint
 
-from . import engage, export, funnel
+from . import engage, export, funnel, retention
 
 def export_data(args):
     print(export.export(args.from_date, args.to_date, args.event, args.where,
@@ -39,6 +39,39 @@ def engage_list(args):
     pprint(engage.list(where=args.where, session_id=args.session_id,
                          page=args.page))
 
+def retention_data(args):
+    data = retention.retention(args.from_date, args.to_date,
+                               retention_type=args.type,
+                               born_event=args.born_event, event=args.event,
+                               born_where=args.born_where, where=args.where,
+                               interval=args.interval,
+                               interval_count=args.interval_count,
+                               unit=args.unit, on=args.on, limit=args.limit)
+
+    if args.csv:
+        dates = sorted(data.keys())
+        columns = range(args.interval_count + 1)
+        df = pd.DataFrame(columns=columns, index=dates)
+        for date in dates:
+            row = data[date]["counts"]
+            for i in range(len(row)):
+                df.loc[date, i] = row[i]
+
+        buf = io.StringIO()
+        if args.unit is None:
+            if args.interval is None:
+                label = "day"
+            else:
+                label = "%d days" % args.interval
+        else:
+            label = args.unit
+
+        df.to_csv(buf, args.fs, index_label=label)
+        buf.seek(0)
+        print(buf.read())
+    else:
+        print(json.dumps(data))
+
 if __name__ == "__main__":
     # Argument Parser
     parser = argparse.ArgumentParser(description="Retrieve Mixpanel data")
@@ -46,6 +79,25 @@ if __name__ == "__main__":
                         help="verbose logging output", action="store_true")
     subparsers = parser.add_subparsers(title="subcommands")
 
+    #
+    # Engage
+    #
+    p_engage = subparsers.add_parser("engage", help="Gets user data")
+    p_engage.add_argument("-w", "--where", type=str, help="An expression to "
+                          "filter people by. See the expression section.")
+    p_engage.add_argument("-p", "--page", type=int, help="Which page of the "
+                          "results to retrieve. Pages start at zero. If the "
+                          "\"page\" parameter is provided, the session_id "
+                          "parameter must also be provided.")
+    p_engage.add_argument("-s", "--session_id", type=str, help="A string id "
+                          "provided in the results of a previous query. Using "
+                          "a session_id speeds up api response, and allows "
+                          "paging through results.")
+    p_engage.set_defaults(func=engage_list)
+
+    #
+    # Export
+    #
     p_export = subparsers.add_parser("export", help="Export a date range")
     p_export.add_argument("from_date", help="The date in yyyy-mm-dd format "
                           "from which to begin querying for the event from. "
@@ -63,6 +115,9 @@ if __name__ == "__main__":
                           "data bucket you would like to query.")
     p_export.set_defaults(func=export_data)
 
+    #
+    # Funnel
+    #
     p_funnel = subparsers.add_parser("funnel", help="Perform actions on funnels")
     sp_funnel = p_funnel.add_subparsers(title="funnel subcommands")
     p_funnel_list = sp_funnel.add_parser("list", help="Get the names and funnel_ids of your funnels.")
@@ -76,18 +131,62 @@ if __name__ == "__main__":
                                "output. Defaults to ','.")
     p_funnel_show.set_defaults(func=funnel_show)
 
-    p_engage = subparsers.add_parser("engage", help="Gets user data")
-    p_engage.add_argument("-w", "--where", type=str, help="An expression to "
-                          "filter people by. See the expression section.")
-    p_engage.add_argument("-p", "--page", type=int, help="Which page of the "
-                          "results to retrieve. Pages start at zero. If the "
-                          "\"page\" parameter is provided, the session_id "
-                          "parameter must also be provided.")
-    p_engage.add_argument("-s", "--session_id", type=str, help="A string id "
-                          "provided in the results of a previous query. Using "
-                          "a session_id speeds up api response, and allows "
-                          "paging through results.")
-    p_engage.set_defaults(func=engage_list)
+    #
+    # Retention
+    #
+    p_retention = subparsers.add_parser("retention",
+                                        help="Get cohort analysis.")
+    p_retention.add_argument("from_date", type=str,
+                             help="The date in yyyy-mm-dd format from which to "
+                             "begin generating cohorts from. This date is inclusive.")
+    p_retention.add_argument("to_date", type=str,
+                             help="The date in yyyy-mm-dd format from which to "
+                             "stop generating cohorts from. This date is inclusive.")
+    p_retention.add_argument("--type", "-t", type=str,
+                             choices=(None, "birth", "compounded"),
+                             help="Must be either 'birth' or 'compounded'. "
+                             "Defaults to 'birth'.")
+    p_retention.add_argument("--born_event", "-b", type=str,
+                             help="The first event a user must do to be "
+                             "counted in a birth retention cohort. Required "
+                             "when retention_type is 'birth'; ignored otherwise.")
+    p_retention.add_argument("--event", "-e", type=str,
+                             help="The event to generate returning counts for. "
+                             "Applies to both birth and compounded retention. "
+                             "If not specified, we look across all events.")
+    p_retention.add_argument("--born_where", type=str,
+                             help="An expression to filter born_events by. See "
+                             "the expression section.")
+    p_retention.add_argument("--where", "-w", type=str,
+                             help="An expression to filter the returning "
+                             "events by. See the expression section.")
+    p_retention.add_argument("--interval", "-i", type=int,
+                             help="The number of days you want your results "
+                             "bucketed into. The default value is 1 or "
+                             "specified by unit.")
+    p_retention.add_argument("--interval_count", "-c", type=int, default=1,
+                             help="The number of intervals you want; defaults "
+                             "to 1.")
+    p_retention.add_argument("--unit", "-u", type=str,
+                             choices=(None, "day", "week", "month"),
+                             help="This is an alternate way of specifying "
+                             "interval and can be 'day', 'week', or 'month'.")
+    p_retention.add_argument("--on", type=str,
+                             help="The property expression to segment the "
+                             "second event on. See the expression section.")
+    p_retention.add_argument("--limit", "-l", type=int,
+                             help="Return the top limit segmentation values. "
+                             "This parameter does nothing if 'on' is not specified.")
+    p_retention.add_argument("--csv", action="store_true",
+                             help="Print output in CSV format")
+    p_retention.add_argument("--fs", type=str, default=",",
+                               help="Field separator to use when printing CSV "
+                               "output. Defaults to ','.")
+    p_retention.set_defaults(func=retention_data)
+
+    #
+    # Handle input
+    #
 
     args = parser.parse_args()
 
