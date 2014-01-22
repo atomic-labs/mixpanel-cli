@@ -13,6 +13,6 @@ setup(
     description = ("Command line tool for querying the Mixpanel API"),
     license = "MIT",
     url = "http://www.atomicmgmt.com",
-    packages=['mixpanel_cli'],
+    packages=["mixpanel_cli"],
     install_requires=reqs
 )

@@ -8,7 +8,17 @@ import sys
 
 from pprint import pprint
 
-from . import engage, export, funnel, retention
+from . import engage, events, export, funnel, retention
+
+def events_get(args):
+    print(events.events(args.event, args.type, args.unit, args.interval,
+                        "csv" if args.csv else "json"))
+
+def events_top(args):
+    print(events.top(args.type, args.limit))
+
+def events_names(args):
+    print(events.names(args.type, args.limit))
 
 def export_data(args):
     print(export.export(args.from_date, args.to_date, args.event, args.where,
@@ -78,6 +88,53 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--verbose", dest="verbose",
                         help="verbose logging output", action="store_true")
     subparsers = parser.add_subparsers(title="subcommands")
+    #
+    # Events
+    #
+    p_events = subparsers.add_parser("events", help="Query events")
+    sp_events = p_events.add_subparsers(title="events subcommands")
+    p_event_get = sp_events.add_parser("get", help="Get unique, total, or "
+                                       "average data for a set of events over "
+                                       "the last N days, weeks, or months.")
+    p_event_get.add_argument("--event", "-e", action="append", required=True,
+                             help="The event that you wish to get data for. "
+                             "This argument may be included multiple times")
+    p_event_get.add_argument("--type", "-t", required=True,
+                             choices=("general", "unique", "average"),
+                             help="The analysis type you would like to get "
+                             "data for - such as general, unique, or average "
+                             "events.")
+    p_event_get.add_argument("--unit", "-u", required=True,
+                             choices=("minute", "hour", "day", "week", "month"),
+                             help="Determines the level of granularity of the "
+                             "data you get back. Note that you cannot get "
+                             "hourly uniques.")
+    p_event_get.add_argument("--interval", "-i", required=True, type=int,
+                             help="The number of \"units\" to return data for.")
+    p_event_get.add_argument("--csv", action="store_true",
+                             help="Print output in CSV format")
+    p_event_get.set_defaults(func=events_get)
+    p_event_top = sp_events.add_parser("top", help="Get the top events for "
+                                       "today, with their counts and the "
+                                       "normalized percent change from "
+                                       "yesterday.")
+    p_event_top.add_argument("type", choices=("general", "unique", "average"),
+                             help="The analysis type you would like to get "
+                             "data for - such as general, unique, or average "
+                             "events.")
+    p_event_top.add_argument("--limit", "-l", type=int, help="The maximum "
+                             "number of events to return. Defaults to 100. The "
+                             "maximum this value can be is 100.")
+    p_event_top.set_defaults(func=events_top)
+    p_event_names = sp_events.add_parser("names", help="Get a list of the most "
+                                         "common events over the last 31 days.")
+    p_event_names.add_argument("type", choices=("general", "unique", "average"),
+                               help="The analysis type you would like to get "
+                               "data for - such as general, unique, or average "
+                               "events.")
+    p_event_names.add_argument("--limit", "-l", type=int, help="The maximum "
+                               "number of events to return. Defaults to 255.")
+    p_event_names.set_defaults(func=events_names)
 
     #
     # Engage
